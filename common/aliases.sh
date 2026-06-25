@@ -31,9 +31,14 @@ cmdbook() {
     grep '^# ──' "$f" | sed 's/^# //'; return
   fi
   awk -v want="$(printf %s "$filter" | tr 'A-Z' 'a-z')" '
-    /^# ──/ { show=(index(tolower($0),want)>0); if(show) printf "\n%s\n", substr($0,3); next }
-    !show { next }
-    /^alias / || /^[A-Za-z0-9_-]+\(\)/ || /^# / { print }
+    function flush() {
+      if ((show || hit) && hdr != "") { printf "\n%s\n", hdr; for (i=1;i<=n;i++) print body[i] }
+      n=0; show=0; hit=0
+    }
+    /^# ──/ { flush(); hdr=substr($0,3); show=(index(tolower($0),want)>0); next }
+    { if (index(tolower($0),want)>0) hit=1                    # match in header OR any command
+      if (/^alias / || /^[A-Za-z0-9_-]+\(\)/ || /^# /) body[++n]=$0 }
+    END { flush() }
   ' "$f"
 }
 

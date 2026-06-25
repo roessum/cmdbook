@@ -67,8 +67,9 @@ cmdbook ubuntu           # categories on the Pi (wifi, dns, dhcp, nftables…)
 cmdbook ubuntu network   # show the commands in matching categories
 ```
 
-The last argument is a case-insensitive filter on the category name — try
-`git`, `ssh`, `wifi`, `route`, `firewall`, `wireguard`, …
+The last argument is a case-insensitive filter matching the category name *or
+any command inside it*, and prints every category that matches — try `git`,
+`ssh`, `wifi`, `route`, `masquerade`, `firewall`, `wireguard`, …
 
 ## Add what you forget
 
