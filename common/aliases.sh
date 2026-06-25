@@ -80,3 +80,14 @@ alias sshgen='ssh-keygen -t ed25519 -C'            # make a new ed25519 key (add
 alias ssh-keys='ssh-add -l'                        # list keys the agent has loaded
 alias ssh-forget='ssh-add -D'                      # drop all keys from the agent now
 ssh-unlock() { eval "$(ssh-agent -s)"; ssh-add "${1:-$HOME/.ssh/id_ed25519}"; }  # start agent + add a key (default id_ed25519)
+
+# Make sure a single ssh-agent is running and REUSED across all shells, so you
+# unlock a key once per boot instead of once per terminal. Does nothing if an
+# agent is already reachable (e.g. the macOS Keychain agent).
+ssh-agent-ensure() {
+  ssh-add -l >/dev/null 2>&1; [ $? -ne 2 ] && return 0      # agent already reachable
+  local env="$HOME/.ssh/agent.env"
+  if [ -f "$env" ]; then . "$env" >/dev/null 2>&1; ssh-add -l >/dev/null 2>&1; [ $? -ne 2 ] && return 0; fi
+  (umask 077; ssh-agent -s > "$env") && . "$env" >/dev/null 2>&1   # start a fresh persistent agent
+}
+case $- in *i*) ssh-agent-ensure 2>/dev/null ;; esac   # auto-run in interactive shells
