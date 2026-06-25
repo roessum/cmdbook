@@ -35,8 +35,13 @@ wifi-doctor() {
 
   printf '%-18s' "$IF link:"
   if ip link show "$IF" >/dev/null 2>&1; then
-    if ip link show "$IF" | head -1 | grep -qw UP; then echo "$P up"
-    else echo "$W exists but DOWN — 'sudo ip link set $IF up'"; fi
+    # operstate is the REAL state — flags can say UP while the radio has no carrier
+    local st; st=$(cat "/sys/class/net/$IF/operstate" 2>/dev/null)
+    case "$st" in
+      up|unknown) echo "$P $st" ;;
+      down)       echo "$F DOWN/no-carrier — radio not beaconing. Is hostapd serving $IF? ('ap-status')" ;;
+      *)          echo "$W ${st:-unknown} — 'sudo ip link set $IF up'" ;;
+    esac
   else
     echo "$F interface not found"
   fi
@@ -176,11 +181,15 @@ net-doctor() {
   printf '%-20s' "default route:"
   if [ -n "$gw" ]; then echo "$P via $gw"; else echo "$F none — no path off the LAN"; fi
 
-  printf '%-20s' "gateway reachable:"
-  if [ -n "$gw" ] && ping -c1 -W1 "$gw" >/dev/null 2>&1; then echo "$P $gw"; else echo "$F can't reach ${gw:-gateway}"; fi
-
+  local inet=0
   printf '%-20s' "internet (1.1.1.1):"
-  if ping -c1 -W2 1.1.1.1 >/dev/null 2>&1; then echo "$P reachable"; else echo "$F no internet — check NAT/route"; fi
+  if ping -c1 -W2 1.1.1.1 >/dev/null 2>&1; then inet=1; echo "$P reachable"; else echo "$F no internet — check NAT/route"; fi
+
+  printf '%-20s' "gateway reachable:"
+  if [ -z "$gw" ]; then echo "$F no gateway"
+  elif ping -c1 -W1 "$gw" >/dev/null 2>&1; then echo "$P $gw"
+  elif [ "$inet" = 1 ]; then echo "$P $gw (no ping reply, but internet works — ISP likely blocks ICMP)"
+  else echo "$F can't reach $gw"; fi
 
   printf '%-20s' "DNS resolves:"
   if getent hosts github.com >/dev/null 2>&1; then echo "$P ok"; else echo "$W fails (but ping-by-IP worked? then it's DNS)"; fi
