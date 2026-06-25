@@ -3,6 +3,14 @@
 # Aliases that need an argument just prefix the command — type the rest after it,
 # e.g.  gsw my-branch   ->   git switch my-branch
 
+# ── cmdbook itself ──────────────────────────────────────────────────────────
+# pull the latest cmdbook and reload aliases into THIS shell (no new shell needed)
+cmd-update() {
+  local d="${CMDBOOK_DIR:-$HOME/cmdbook}"
+  git -C "$d" pull && . "$d/load.sh" && echo "cmdbook updated + reloaded ✓"
+}
+alias cmd-edit='${EDITOR:-nano} "${CMDBOOK_DIR:-$HOME/cmdbook}"'   # open the repo to add aliases
+
 # ── git: status & history ──────────────────────────────────────────────────
 alias gs='git status -sb'                          # short status + branch info
 alias gl='git log --oneline --graph --all'         # compact, visual history

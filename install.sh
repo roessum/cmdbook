@@ -37,7 +37,8 @@ LOADER="$DIR/load.sh"
 # Generate a loader that sources common + this platform on every shell start.
 {
   echo '# cmdbook — sourced aliases'
-  echo "for f in \"$DIR/common/aliases.sh\" \"$DIR/$PLATFORM/aliases.sh\"; do"
+  echo "export CMDBOOK_DIR=\"$DIR\""        # so cmd-update knows where the repo is
+  echo "for f in \"\$CMDBOOK_DIR/common/aliases.sh\" \"\$CMDBOOK_DIR/$PLATFORM/aliases.sh\"; do"
   echo '  [ -f "$f" ] && . "$f"'
   echo 'done'
 } > "$LOADER"
