@@ -69,3 +69,6 @@ alias gpushtags='git push --tags'                  # push all tags
 alias sshkey='cat ~/.ssh/id_ed25519.pub'           # print my SSH public key (add to GitHub)
 alias sshtest='ssh -T git@github.com'              # test the GitHub SSH connection
 alias sshgen='ssh-keygen -t ed25519 -C'            # make a new ed25519 key (add "your@email")
+alias ssh-keys='ssh-add -l'                        # list keys the agent has loaded
+alias ssh-forget='ssh-add -D'                      # drop all keys from the agent now
+ssh-unlock() { eval "$(ssh-agent -s)"; ssh-add "${1:-$HOME/.ssh/id_ed25519}"; }  # start agent + add a key (default id_ed25519)

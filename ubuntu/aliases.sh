@@ -86,6 +86,9 @@ alias myip='curl -s ifconfig.me; echo'                       # my public IP (com
 alias dns-check='dig +short'                                  # what a domain resolves to (add a domain)
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 
+# ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
+alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
+
 # ── system / services ───────────────────────────────────────────────────────
 alias reload='sudo systemctl daemon-reload'                   # reload unit files after editing
 alias svc-status='sudo systemctl status'                      # status of a service (add a name)
