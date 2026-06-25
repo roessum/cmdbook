@@ -1,0 +1,72 @@
+# ~/.ssh/config — SSH client profiles.
+# Copy what you need into ~/.ssh/config, then:  chmod 600 ~/.ssh/config
+# Hosts are matched top-to-bottom; the FIRST value set for an option wins,
+# so put specific hosts above broad ones, and "Host *" last.
+
+# ── Defaults applied to every host (unless overridden above) ──────────────
+Host *
+    AddKeysToAgent yes              # add key to ssh-agent on first use
+    UseKeychain yes                 # macOS: store passphrase in Keychain
+    IdentitiesOnly yes              # only offer the IdentityFile(s) listed
+    ServerAliveInterval 60          # ping every 60s to keep the link alive
+    ServerAliveCountMax 3           # drop after 3 missed pings
+    Compression yes
+    HashKnownHosts yes              # privacy: hash hostnames in known_hosts
+
+# ── GitHub ────────────────────────────────────────────────────────────────
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    PreferredAuthentications publickey
+
+# Second GitHub account on the same machine.
+# Clone with:  git clone git@github-work:org/repo.git
+Host github-work
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+
+# ── Raspberry Pi (LAN) ──────────────────────────────────────────────────────
+Host pi
+    HostName raspberrypi.local      # or a fixed IP like 192.168.1.50
+    User roessum
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes                # let the Pi use your local keys (trusted hosts only)
+    RequestTTY yes
+
+# ── A server reached through a bastion/jump host ────────────────────────────
+Host bastion
+    HostName bastion.example.com
+    User admin
+    IdentityFile ~/.ssh/id_ed25519
+
+Host db-internal
+    HostName 10.0.0.20              # only reachable from inside the network
+    User deploy
+    ProxyJump bastion               # hop through the bastion host above
+    LocalForward 5432 localhost:5432   # tunnel remote Postgres to local :5432
+
+# ── Reference: other options you can set per host ───────────────────────────
+# HostName            actual hostname/IP to connect to (Host is just the alias)
+# User                login user
+# Port                non-default SSH port
+# IdentityFile        private key to use (repeatable for multiple keys)
+# IdentitiesOnly      yes = don't try every key in the agent
+# ProxyJump           bastion to tunnel through (alias or user@host[:port])
+# ProxyCommand        custom command to establish the connection
+# ForwardAgent        forward ssh-agent (only to hosts you fully trust)
+# ForwardX11          forward GUI apps
+# LocalForward        [bind:]port host:hostport  — local → remote tunnel
+# RemoteForward       [bind:]port host:hostport  — remote → local tunnel
+# DynamicForward      port  — SOCKS proxy over SSH
+# StrictHostKeyChecking  yes / no / accept-new
+# UserKnownHostsFile  alternate known_hosts path
+# ConnectTimeout      seconds before giving up
+# ServerAliveInterval keepalive ping interval (seconds)
+# Ciphers / MACs / KexAlgorithms   restrict crypto for hardening
+# LogLevel            QUIET / VERBOSE / DEBUG3 (debugging)
+# AddKeysToAgent      yes / confirm / ask
+# UseKeychain         macOS only: passphrase in Keychain
