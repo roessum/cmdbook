@@ -149,7 +149,8 @@ ssh-web() {
   local target="$1" port="${2:-8180}" name="$3"
   [ -n "$target" ] || { echo "usage: ssh-web <user@host> [port] [hostname]"; return 1; }
   [ -n "$name" ] && host-add 127.0.0.1 "$name"
-  echo "tunnel: localhost:$port -> $target (its localhost:$port).  Ctrl-C to stop."
-  echo "open:   http://${name:-localhost}:$port"
-  ssh -N -L "127.0.0.1:$port:localhost:$port" "$target"
+  echo "tunnel: localhost:${port} -> $target (its localhost:${port}).  Ctrl-C to stop."
+  echo "open:   http://${name:-localhost}:${port}"
+  # braces are required: in zsh, $port:localhost would parse :l as a modifier
+  ssh -N -L "127.0.0.1:${port}:localhost:${port}" "$target"
 }
