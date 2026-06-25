@@ -1,6 +1,24 @@
 # Ubuntu / Raspberry Pi aliases — short names for the commands I keep forgetting.
 # Sourced by install.sh. Every line is commented so you can see what it does.
 
+# ── cmdbook auto-update (cron) ──────────────────────────────────────────────
+# Keep the repo fresh in the background. NOTE: cron has no ssh-agent, so the
+# pull must work non-interactively — use a passwordless deploy key or an HTTPS
+# remote, otherwise a passphrase-protected SSH key will make the cron job hang.
+# Running shells still pick up changes only on a new shell or `cmd-update`.
+alias cron-edit='crontab -e'                                   # edit your crontab
+alias cron-list='crontab -l'                                   # show your crontab
+cmd-cron-on() {   # enable a pull every 6 hours
+  local d="${CMDBOOK_DIR:-$HOME/cmdbook}"
+  ( crontab -l 2>/dev/null | grep -v "cmdbook pull"; \
+    echo "0 */6 * * * git -C $d pull --quiet # cmdbook pull" ) | crontab -
+  echo "cmdbook auto-update on (every 6h) — needs non-interactive git auth"
+}
+cmd-cron-off() {  # remove the auto-update job
+  crontab -l 2>/dev/null | grep -v "cmdbook pull" | crontab - 2>/dev/null
+  echo "cmdbook auto-update off"
+}
+
 # ── hostapd / access point ──────────────────────────────────────────────────
 alias ap-status='sudo systemctl status hostapd-wlan0'         # is the AP service running?
 alias ap-restart='sudo systemctl restart hostapd'             # restart the access point

@@ -19,6 +19,11 @@ if [ -n "${BASH_SOURCE:-}" ] && [ "${BASH_SOURCE[0]}" != "${0}" ]; then _sourced
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Use the tracked git hooks (pre-commit checks syntax + duplicate names).
+if [ -d "$DIR/.githooks" ] && git -C "$DIR" rev-parse >/dev/null 2>&1; then
+  git -C "$DIR" config core.hooksPath .githooks
+fi
+
 # Pick the platform aliases file.
 case "$(uname -s)" in
   Linux)  PLATFORM="ubuntu" ;;

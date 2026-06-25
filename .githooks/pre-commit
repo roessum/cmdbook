@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Block a commit that would break the auto-sourced aliases: every new shell on
+# the Pi sources these files, so a syntax error or duplicate name breaks them all.
+# Enable once with:  git config core.hooksPath .githooks   (install.sh does this)
+set -euo pipefail
+
+DIR="$(git rev-parse --show-toplevel)"
+fail=0
+
+# 1. Syntax-check every aliases.sh.
+while IFS= read -r f; do
+  if ! bash -n "$f"; then echo "✗ syntax error in $f"; fail=1; fi
+done < <(find "$DIR" -name 'aliases.sh')
+
+# 2. No duplicate / shadowing alias or function names.
+if [ -x "$DIR/check.sh" ] && ! "$DIR/check.sh" >/dev/null; then
+  "$DIR/check.sh" || true   # re-run to show the offending names
+  fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: blocked — fix the above before committing."
+  exit 1
+fi
