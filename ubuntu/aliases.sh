@@ -86,6 +86,19 @@ alias myip='curl -s ifconfig.me; echo'                       # my public IP (com
 alias dns-check='dig +short'                                  # what a domain resolves to (add a domain)
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 
+# ── nftables firewall ───────────────────────────────────────────────────────
+alias fw='sudo nft list ruleset'                              # show the whole ruleset
+alias fw-handles='sudo nft -a list ruleset'                   # ruleset WITH handles (needed to delete a rule)
+alias fw-tables='sudo nft list tables'                        # just the table names
+alias fw-edit='sudo nano /etc/nftables.conf'                  # edit the persistent ruleset
+alias fw-test='sudo nft -c -f /etc/nftables.conf'             # validate the file WITHOUT applying it
+alias fw-apply='sudo nft -f /etc/nftables.conf'               # load the ruleset from the file
+alias fw-reload='sudo systemctl restart nftables'             # reload via the service
+alias fw-status='sudo systemctl status nftables'              # is the service running?
+alias fw-monitor='sudo nft monitor'                           # watch ruleset changes live
+alias fw-save='sudo nft list ruleset | sudo tee /etc/nftables.conf'  # persist running rules to the file
+alias fw-flush='sudo nft flush ruleset'                       # wipe ALL rules (careful — can lock you out)
+
 # ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
 
