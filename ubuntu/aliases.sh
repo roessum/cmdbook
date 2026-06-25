@@ -20,6 +20,70 @@ alias wifi-vht='iw phy phy0 info | grep -A 10 "VHT Capabilities"'  # check 5 GHz
 alias wifi-reg='sudo iw reg get'                             # show current regulatory domain
 alias wifi-country-dk='sudo raspi-config nonint do_wifi_country DK'  # set WiFi country to DK
 
+# Run a battery of AP/WiFi health checks and flag the likely culprit.
+# Usage:  wifi-doctor [interface]   (default wlan0).  Uses sudo for a few checks.
+wifi-doctor() {
+  local IF="${1:-wlan0}" P="✓" W="⚠" F="✗"
+  printf '── wifi-doctor (%s) ──────────────────────────\n' "$IF"
+
+  printf '%-18s' "adapters:"
+  if iw dev 2>/dev/null | grep -q Interface; then
+    echo "$P $(iw dev 2>/dev/null | grep -c Interface) wireless interface(s)"
+  else
+    echo "$F none found — check 'lsusb' / driver loaded"
+  fi
+
+  printf '%-18s' "$IF link:"
+  if ip link show "$IF" >/dev/null 2>&1; then
+    if ip link show "$IF" | head -1 | grep -qw UP; then echo "$P up"
+    else echo "$W exists but DOWN — 'sudo ip link set $IF up'"; fi
+  else
+    echo "$F interface not found"
+  fi
+
+  printf '%-18s' "rfkill:"
+  if command -v rfkill >/dev/null 2>&1; then
+    if rfkill list 2>/dev/null | grep -qi "blocked: yes"; then echo "$F radio BLOCKED — 'sudo rfkill unblock wifi'"
+    else echo "$P not blocked"; fi
+  else echo "$W rfkill not installed"; fi
+
+  printf '%-18s' "reg domain:"
+  local reg; reg=$(iw reg get 2>/dev/null | awk -F: '/country/{gsub(/ /,"",$2); print $2; exit}')
+  if [ -z "$reg" ] || [ "${reg%%:*}" = "00" ]; then
+    echo "$W unset (00) — 5GHz/channels limited. 'wifi-country-dk'"
+  else echo "$P $reg"; fi
+
+  printf '%-18s' "hostapd:"
+  if systemctl is-active --quiet hostapd 2>/dev/null || systemctl is-active --quiet hostapd-wlan0 2>/dev/null; then
+    echo "$P running"
+  else echo "$F not running — 'ap-status' for why"; fi
+
+  printf '%-18s' "dnsmasq (DHCP):"
+  if systemctl is-active --quiet dnsmasq 2>/dev/null; then echo "$P running"
+  else echo "$W not running — clients won't get an IP"; fi
+
+  printf '%-18s' "$IF address:"
+  local addr; addr=$(ip -4 addr show "$IF" 2>/dev/null | awk '/inet /{print $2; exit}')
+  if [ -n "$addr" ]; then echo "$P $addr"; else echo "$W no IPv4 — AP needs a static address"; fi
+
+  printf '%-18s' "NM on $IF:"
+  if command -v nmcli >/dev/null 2>&1; then
+    case "$(nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: -v i="$IF" '$1==i{print $2}')" in
+      unmanaged) echo "$P unmanaged (good for a hostapd AP)" ;;
+      "")        echo "$W not listed — 'net-status'" ;;
+      *)         echo "$W managed by NetworkManager — may fight hostapd" ;;
+    esac
+  else echo "$P no NetworkManager"; fi
+
+  printf '%-18s' "clients on $IF:"
+  echo "$(sudo iw dev "$IF" station dump 2>/dev/null | grep -c Station) connected"
+
+  echo "recent hostapd warnings:"
+  sudo journalctl -u hostapd -u hostapd-wlan0 --since "5 min ago" -p warning -q 2>/dev/null | tail -5 | sed 's/^/    /'
+  echo "──────────────────────────────────────────────"
+}
+alias wifi-debug='wifi-doctor'                               # alias for wifi-doctor
+
 # ── interface control (usage: wlan-up wlan0 / wlan-down wlan0) ──────────────
 wlan-up()   { sudo ip link set "${1:-wlan0}" up; }            # bring an interface up (default wlan0)
 wlan-down() { sudo ip link set "${1:-wlan0}" down; }          # bring an interface down (default wlan0)
