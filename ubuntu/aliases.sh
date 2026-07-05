@@ -251,6 +251,28 @@ alias fw-flush='sudo nft flush ruleset'                       # wipe ALL rules (
 # ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
 
+# ── uptime & shutdown history ───────────────────────────────────────────────
+alias up='uptime -p'                                          # how long has it been up (pretty)
+alias boot-time='uptime -s'                                   # exact time it last booted
+alias boots='journalctl --list-boots'                         # every boot systemd remembers
+alias reboots='last -x reboot | head'                         # recent reboots
+alias shutdowns='last -x shutdown | head'                     # recent shutdowns
+alias downtime='last -xF shutdown reboot | head -20'          # shutdown+reboot events with full dates
+# Show WHEN it last went down and try to explain WHY (clean vs crash/power loss).
+why-down() {
+  echo "── recent power events (newest first) ──"
+  last -xF shutdown reboot | head -10
+  echo
+  echo "── end of the PREVIOUS boot's log (how it went down) ──"
+  # A clean shutdown ends with systemd 'Reached target ... Power-Off/Reboot'.
+  # If it just stops mid-log with no such line, it was a crash or power loss.
+  sudo journalctl -b -1 -n 25 --no-pager 2>/dev/null || echo "(no previous boot stored)"
+  echo
+  echo "── errors during the previous boot ──"
+  sudo journalctl -b -1 -p err --no-pager 2>/dev/null | tail -15
+}
+alias last-down='why-down'                                    # alias for why-down
+
 # ── system / services ───────────────────────────────────────────────────────
 alias reload='sudo systemctl daemon-reload'                   # reload unit files after editing
 alias svc-status='sudo systemctl status'                      # status of a service (add a name)
