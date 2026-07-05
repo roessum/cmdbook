@@ -4,12 +4,37 @@
 # e.g.  gsw my-branch   ->   git switch my-branch
 
 # ── cmdbook itself ──────────────────────────────────────────────────────────
-# pull the latest cmdbook and reload aliases into THIS shell (no new shell needed)
+# Pull the latest cmdbook and reload it into THIS shell. Loads the ssh key into
+# the agent first, so you type the passphrase at most once per boot (not per pull).
+# Override the key it loads with CMDBOOK_KEY if auto-detection guesses wrong.
 cmd-update() {
-  local d="${CMDBOOK_DIR:-$HOME/cmdbook}"
+  local d="${CMDBOOK_DIR:-$HOME/cmdbook}" host key
+  ssh-agent-ensure 2>/dev/null                        # start/reuse a persistent agent
+  if ! ssh-add -l >/dev/null 2>&1; then               # agent has no key → add the one origin uses
+    key="$CMDBOOK_KEY"
+    [ -z "$key" ] && host=$(git -C "$d" remote get-url origin 2>/dev/null | sed -E 's#^[a-z]+://##; s/.*@//; s/[:/].*//')
+    [ -z "$key" ] && key=$(ssh -G "${host:-github.com}" 2>/dev/null | awk '/^identityfile /{print $2; exit}')
+    case "$key" in "~/"*) key="$HOME/${key#\~/}" ;; esac
+    [ -n "$key" ] && [ -f "$key" ] && ssh-add "$key"   # prompts for passphrase once, then remembered
+  fi
   git -C "$d" pull && . "$d/load.sh" && echo "cmdbook updated + reloaded ✓"
 }
 alias cmd-edit='${EDITOR:-nano} "${CMDBOOK_DIR:-$HOME/cmdbook}"'   # open the repo to add aliases
+# List when each alias/function was first added (from git history), newest last.
+# cmd-new [N] shows the N most recently added (default 20).
+cmd-new() {
+  local d="${CMDBOOK_DIR:-$HOME/cmdbook}" n="${1:-20}"
+  git -C "$d" log --reverse --date=short --format='COMMIT %ad' -p -- '*aliases.sh' 2>/dev/null | awk '
+    /^COMMIT / { date=$2; next }
+    /^\+[[:space:]]*alias [A-Za-z0-9_-]+=/ {
+      s=$0; sub(/^\+[[:space:]]*alias /,"",s); sub(/=.*/,"",s)
+      if (!(s in seen)) { seen[s]=date; ord[++k]=s } }
+    /^\+[[:space:]]*[A-Za-z0-9_-]+\(\)/ {
+      s=$0; sub(/^\+[[:space:]]*/,"",s); sub(/\(\).*/,"",s)
+      if (!(s in seen)) { seen[s]=date; ord[++k]=s } }
+    END { for (i=1;i<=k;i++) printf "%s  %s\n", seen[ord[i]], ord[i] }
+  ' | tail -n "$n"
+}
 
 # Browse the book by category (the "# ── ... ──" section headers).
 #   cmdbook                     list every platform and its categories
