@@ -252,21 +252,26 @@ alias fw-flush='sudo nft flush ruleset'                       # wipe ALL rules (
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
 
 # ── uptime & shutdown history ───────────────────────────────────────────────
+# NB: minimal Pi OS has no `last`/wtmp, so this uses journalctl. Needs a
+# PERSISTENT journal to see previous boots — enable once with `journal-persist`.
 alias up='uptime -p'                                          # how long has it been up (pretty)
 alias boot-time='uptime -s'                                   # exact time it last booted
-alias boots='journalctl --list-boots'                         # every boot systemd remembers
-alias reboots='last -x reboot | head'                         # recent reboots
-alias shutdowns='last -x shutdown | head'                     # recent shutdowns
-alias downtime='last -xF shutdown reboot | head -20'          # shutdown+reboot events with full dates
+alias boots='journalctl --list-boots'                         # each boot + its time range (gaps = downtime)
+alias last-boot='sudo journalctl -b -1 -n 30 --no-pager'      # tail of the PREVIOUS boot (how it ended)
+alias journal-persist='sudo mkdir -p /var/log/journal && sudo systemd-tmpfiles --create --prefix /var/log/journal && sudo systemctl restart systemd-journald'  # keep logs across reboots
 # Show WHEN it last went down and try to explain WHY (clean vs crash/power loss).
 why-down() {
-  echo "── recent power events (newest first) ──"
-  last -xF shutdown reboot | head -10
+  echo "── boots systemd remembers (id, first → last message) ──"
+  journalctl --list-boots 2>/dev/null | tail -10 || echo "(need sudo, or no persistent journal — run journal-persist)"
   echo
-  echo "── end of the PREVIOUS boot's log (how it went down) ──"
-  # A clean shutdown ends with systemd 'Reached target ... Power-Off/Reboot'.
-  # If it just stops mid-log with no such line, it was a crash or power loss.
-  sudo journalctl -b -1 -n 25 --no-pager 2>/dev/null || echo "(no previous boot stored)"
+  echo "── how the PREVIOUS boot ended ──"
+  # Clean shutdown ends with 'Reached target ... Power-Off/Reboot' or
+  # 'systemd-shutdown ... Powering off'. Log just stopping = crash/power loss.
+  if sudo journalctl -b -1 -n 20 --no-pager >/tmp/.whydown 2>/dev/null && [ -s /tmp/.whydown ]; then
+    cat /tmp/.whydown; rm -f /tmp/.whydown
+  else
+    echo "(no previous boot in the journal — it's likely volatile; run 'journal-persist')"
+  fi
   echo
   echo "── errors during the previous boot ──"
   sudo journalctl -b -1 -p err --no-pager 2>/dev/null | tail -15
