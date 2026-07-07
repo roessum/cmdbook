@@ -64,12 +64,17 @@ leaving the shell:
 ```bash
 cmdbook                  # every platform and its categories
 cmdbook ubuntu           # categories on the Pi (wifi, dns, dhcp, nftables…)
-cmdbook ubuntu network   # show the commands in matching categories
+cmdbook ubuntu network   # commands in matching categories (this platform)
+cmdbook search vpn       # search ALL platforms by keyword
 ```
 
-The last argument is a case-insensitive filter matching the category name *or
-any command inside it*, and prints every category that matches — try `git`,
-`ssh`, `wifi`, `route`, `masquerade`, `firewall`, `wireguard`, …
+The filter is case-insensitive and matches the category name *or any command,
+comment, or `# tags:` line inside it*, printing every category that matches —
+try `git`, `ssh`, `wifi`, `route`, `masquerade`, `firewall`, `vpn`, …
+
+**Tags for synonyms:** a section can carry a `# tags: vpn tunnel peer` line so a
+search finds it by words that aren't in the commands themselves (e.g. `vpn`
+→ the WireGuard section). Add tags to any section — they're just comments.
 
 ## Add what you forget
 

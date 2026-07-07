@@ -36,14 +36,40 @@ cmd-new() {
   ' | tail -n "$n"
 }
 
-# Browse the book by category (the "# ── ... ──" section headers).
+# Print sections of a file that match a term (in the header, a command, a
+# comment, or a "# tags:" line). Args: file, term, platform-label (optional).
+_cmdbook_filter() {
+  awk -v want="$(printf %s "$2" | tr 'A-Z' 'a-z')" -v lbl="$3" '
+    function flush() {
+      if ((show || hit) && hdr != "") {
+        printf "\n%s%s\n", (lbl != "" ? "[" lbl "] " : ""), hdr
+        for (i=1;i<=n;i++) print body[i]
+      }
+      n=0; show=0; hit=0
+    }
+    /^# ──/ { flush(); hdr=substr($0,3); show=(index(tolower($0),want)>0); next }
+    { if (index(tolower($0),want)>0) hit=1                    # match header OR any command/comment/tag
+      if (/^alias / || /^[A-Za-z0-9_-]+\(\)/ || /^# /) body[++n]=$0 }
+    END { flush() }
+  ' "$1"
+}
+
+# Browse or search the book. Sections carry "# tags:" lines for synonyms.
 #   cmdbook                     list every platform and its categories
 #   cmdbook ubuntu              list categories for one platform
-#   cmdbook ubuntu network      show the commands in matching categories
+#   cmdbook ubuntu network      commands in matching categories (that platform)
+#   cmdbook search <term>       search across ALL platforms by keyword
 cmdbook() {
   local dir="${CMDBOOK_DIR:-$HOME/cmdbook}" plat="$1" filter="$2" f p
+  if [ "$plat" = search ]; then
+    shift; filter="$*"
+    [ -n "$filter" ] || { echo "usage: cmdbook search <term>"; return 1; }
+    for p in common ubuntu macos windows; do
+      f="$dir/$p/aliases.sh"; [ -f "$f" ] && _cmdbook_filter "$f" "$filter" "$p"
+    done; return
+  fi
   if [ -z "$plat" ]; then
-    echo "usage: cmdbook <platform> [category]   e.g. cmdbook ubuntu network"
+    echo "usage: cmdbook <platform> [category] | cmdbook search <term>"
     for p in common ubuntu macos windows; do
       f="$dir/$p/aliases.sh"; [ -f "$f" ] || continue
       printf '\n[%s]\n' "$p"; grep '^# ──' "$f" | sed 's/^# //'
@@ -55,16 +81,7 @@ cmdbook() {
     echo "[$plat] categories — 'cmdbook $plat <name>' to open one:"
     grep '^# ──' "$f" | sed 's/^# //'; return
   fi
-  awk -v want="$(printf %s "$filter" | tr 'A-Z' 'a-z')" '
-    function flush() {
-      if ((show || hit) && hdr != "") { printf "\n%s\n", hdr; for (i=1;i<=n;i++) print body[i] }
-      n=0; show=0; hit=0
-    }
-    /^# ──/ { flush(); hdr=substr($0,3); show=(index(tolower($0),want)>0); next }
-    { if (index(tolower($0),want)>0) hit=1                    # match in header OR any command
-      if (/^alias / || /^[A-Za-z0-9_-]+\(\)/ || /^# /) body[++n]=$0 }
-    END { flush() }
-  ' "$f"
+  _cmdbook_filter "$f" "$filter" ""
 }
 
 # ── git: status & history ──────────────────────────────────────────────────

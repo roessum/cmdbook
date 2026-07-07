@@ -20,6 +20,7 @@ cmd-cron-off() {  # remove the auto-update job
 }
 
 # ── hostapd / access point ──────────────────────────────────────────────────
+# tags: wifi ap accesspoint beacon ssid 2.4ghz 5ghz radio
 alias ap-status='sudo systemctl status hostapd-wlan0'         # is the AP service running?
 alias ap-restart='sudo systemctl restart hostapd'             # restart the access point
 alias ap-stop='sudo killall hostapd'                          # kill all hostapd processes
@@ -128,6 +129,7 @@ wlan-up()   { sudo ip link set "${1:-wlan0}" up; }            # bring an interfa
 wlan-down() { sudo ip link set "${1:-wlan0}" down; }          # bring an interface down (default wlan0)
 
 # ── wireguard VPN (assumes interface wg0) ───────────────────────────────────
+# tags: vpn tunnel peer handshake
 alias wg-show='sudo wg show'                                  # tunnels, peers, handshakes, transfer
 alias wg-up='sudo wg-quick up wg0'                            # bring the wg0 tunnel up
 alias wg-down='sudo wg-quick down wg0'                        # bring the wg0 tunnel down
@@ -140,6 +142,7 @@ alias wg-latest='sudo wg show wg0 latest-handshakes'          # last handshake p
 wg-keys() { wg genkey | sudo tee /etc/wireguard/privatekey | wg pubkey | sudo tee /etc/wireguard/publickey; }
 
 # ── DNS ─────────────────────────────────────────────────────────────────────
+# tags: resolver nameserver resolv systemd-resolved lookup
 alias dns-status='resolvectl status'                          # current DNS servers per link
 alias dns-flush='sudo resolvectl flush-caches'                # clear the DNS cache
 alias dns-query='resolvectl query'                            # resolve a name (add a hostname)
@@ -147,6 +150,7 @@ alias dns-conf='cat /etc/resolv.conf'                        # what's actually b
 alias dns-restart='sudo systemctl restart systemd-resolved'   # restart the resolver
 
 # ── DHCP (dnsmasq) ──────────────────────────────────────────────────────────
+# tags: lease ip-assignment address-pool
 alias dhcp-leases='cat /var/lib/misc/dnsmasq.leases'          # who got which IP
 alias dhcp-restart='sudo systemctl restart dnsmasq'           # restart dnsmasq
 alias dhcp-status='sudo systemctl status dnsmasq'             # is dnsmasq running?
@@ -236,6 +240,7 @@ alias dns-check='dig +short'                                  # what a domain re
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 
 # ── nftables firewall ───────────────────────────────────────────────────────
+# tags: iptables firewall nat masquerade packet-filter port-forward
 alias fw='sudo nft list ruleset'                              # show the whole ruleset
 alias fw-handles='sudo nft -a list ruleset'                   # ruleset WITH handles (needed to delete a rule)
 alias fw-tables='sudo nft list tables'                        # just the table names
