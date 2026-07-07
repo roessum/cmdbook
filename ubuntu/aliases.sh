@@ -278,6 +278,36 @@ why-down() {
 }
 alias last-down='why-down'                                    # alias for why-down
 
+# ── ssh server: who's on & which keys ───────────────────────────────────────
+alias ssh-who='w'                                             # who is logged in + what they're doing
+alias ssh-active='ss -tnp state established sport = :22'      # live ssh connections (IPs)
+alias ssh-logins='sudo journalctl -u ssh -u sshd --no-pager | grep -E "Accepted|Failed" | tail -20'  # recent auth (ok + failed)
+# Recent successful key logins: time, user@ip, key type + fingerprint.
+ssh-key-logins() {
+  sudo journalctl -u ssh -u sshd --no-pager 2>/dev/null | grep "Accepted publickey" | awk '
+    { ts=$1" "$2" "$3
+      for(i=1;i<=NF;i++){ if($i=="for")u=$(i+1); if($i=="from")ip=$(i+1) }
+      printf "%-15s %-22s %s %s\n", ts, u"@"ip, $(NF-1), $NF }' | tail -20
+}
+# For each key in an authorized_keys file: its comment, fingerprint, and when it
+# was last used to log in (from the journal).  ssh-key-usage [authorized_keys]
+ssh-key-usage() {
+  local ak="${1:-$HOME/.ssh/authorized_keys}" tmp fp comment last
+  [ -f "$ak" ] || { echo "no authorized_keys at $ak"; return 1; }
+  tmp=$(mktemp)
+  sudo journalctl -u ssh -u sshd --no-pager 2>/dev/null | grep "Accepted publickey" \
+    | sed -E 's/^(\w+ +[0-9]+ [0-9:]+).*(SHA256:[A-Za-z0-9+/=]+).*/\2 \1/' > "$tmp"
+  echo "keys in $ak:"
+  while IFS= read -r line; do
+    case "$line" in ""|\#*) continue ;; esac
+    fp=$(printf '%s\n' "$line" | ssh-keygen -lf /dev/stdin 2>/dev/null | awk '{print $2}')
+    comment=$(printf '%s' "$line" | awk '{print $NF}')
+    last=$(grep -F "$fp" "$tmp" 2>/dev/null | tail -1 | cut -d' ' -f2-)
+    printf '  %-16s %-50s last: %s\n' "$comment" "$fp" "${last:-never seen in journal}"
+  done < "$ak"
+  rm -f "$tmp"
+}
+
 # ── system / services ───────────────────────────────────────────────────────
 alias reload='sudo systemctl daemon-reload'                   # reload unit files after editing
 alias svc-status='sudo systemctl status'                      # status of a service (add a name)

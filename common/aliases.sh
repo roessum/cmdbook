@@ -136,6 +136,27 @@ alias sshgen='ssh-keygen -t ed25519 -C'            # make a new ed25519 key (add
 alias ssh-keys='ssh-add -l'                        # list keys the agent has loaded
 alias ssh-forget='ssh-add -D'                      # drop all keys from the agent now
 ssh-unlock() { eval "$(ssh-agent -s)"; ssh-add "${1:-$HOME/.ssh/id_ed25519}"; }  # start agent + add a key (default id_ed25519)
+alias ssh-debug='ssh -vvv'                         # verbose connection debug (add user@host)
+ssh-fp() { ssh-keygen -lf "${1:-$HOME/.ssh/id_ed25519.pub}"; }   # fingerprint of a key file
+
+# ── ssh: authorized_keys management ─────────────────────────────────────────
+alias authkeys-list='ssh-keygen -lf ~/.ssh/authorized_keys 2>/dev/null || cat ~/.ssh/authorized_keys'  # fingerprints of allowed keys
+alias authkeys-edit='${EDITOR:-nano} ~/.ssh/authorized_keys'   # edit the file directly
+authkeys-setup() {   # create ~/.ssh + authorized_keys with correct permissions
+  mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+  echo "~/.ssh/authorized_keys ready (700/600)"
+}
+authkeys-add() {     # authkeys-add <pubkey-file | "ssh-ed25519 AAAA... comment">
+  local key="$*"
+  [ -n "$key" ] || { echo 'usage: authkeys-add <pubkey-file | "ssh-... AAAA... comment">'; return 1; }
+  [ -f "$key" ] && key=$(cat "$key")
+  case "$key" in ssh-*|ecdsa-*|sk-*) : ;; *) echo "that doesn't look like a public key"; return 1 ;; esac
+  authkeys-setup >/dev/null
+  grep -qF "$key" ~/.ssh/authorized_keys 2>/dev/null && { echo "already present"; return 0; }
+  printf '%s\n' "$key" >> ~/.ssh/authorized_keys
+  echo "added: $(printf '%s' "$key" | awk '{print $NF}')"
+}
 
 # Make sure a single ssh-agent is running and REUSED across all shells, so you
 # unlock a key once per boot instead of once per terminal. Does nothing if an
