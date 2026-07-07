@@ -27,3 +27,8 @@ relay-bash() {
   if [ -n "$1" ]; then ssh -t "$1" 'docker exec -it plaain-relay /bin/bash'
   else docker exec -it plaain-relay /bin/bash; fi
 }
+# Show the relay's deploy info (which build/customer/tag is running).  relay-info [ssh-host]
+relay-info() {
+  if [ -n "$1" ]; then ssh "$1" 'docker exec plaain-relay cat /config/deploy-info.json'
+  else docker exec plaain-relay cat /config/deploy-info.json; fi
+}
