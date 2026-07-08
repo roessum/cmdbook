@@ -339,7 +339,7 @@ alias ports-open='sudo ss -tlnp'                              # which ports are 
 
 # ── nftables firewall ───────────────────────────────────────────────────────
 # tags: iptables firewall nat masquerade packet-filter port-forward
-alias fw='sudo nft list ruleset'                              # show the whole ruleset
+alias fw='sudo nft list ruleset'                              # show the whole ruleset (incl. counters, if rules have them)
 alias fw-handles='sudo nft -a list ruleset'                   # ruleset WITH handles (needed to delete a rule)
 alias fw-tables='sudo nft list tables'                        # just the table names
 alias fw-edit='sudo nano /etc/nftables.conf'                  # edit the persistent ruleset
@@ -350,11 +350,12 @@ alias fw-status='sudo systemctl status nftables'              # is the service r
 alias fw-monitor='sudo nft monitor'                           # watch RULESET CHANGES live (empty = nothing changing; normal)
 alias fw-save='sudo nft list ruleset | sudo tee /etc/nftables.conf'  # persist running rules to the file
 alias fw-flush='sudo nft flush ruleset'                       # wipe ALL rules (careful — can lock you out)
-# See ACTIVITY, not just rule changes:
-alias fw-counters='sudo nft list ruleset -a'                  # rules with packet/byte counters + handles
+# See ACTIVITY, not just rule changes. Counters show in `fw`/`fw-watch` only
+# if a rule has `counter` — add one with fw-count-add, reset with fw-reset.
 fw-watch() { watch -n1 "sudo nft list ruleset"; }             # live view — see counters climb (needs `watch`)
+alias fw-reset='sudo nft reset counters'                      # zero all counters, then fw-watch to measure fresh
 alias fw-trace='sudo nft monitor trace'                       # per-packet trace (needs a `meta nftrace set 1` rule)
-alias fw-count-add='sudo nft add rule inet filter forward counter'  # add a counting rule to a chain to measure hits
+alias fw-count-add='sudo nft add rule inet filter forward counter'  # add a counter to the forward chain (adjust table/chain)
 
 # ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
