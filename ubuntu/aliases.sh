@@ -347,9 +347,14 @@ alias fw-test='sudo nft -c -f /etc/nftables.conf'             # validate the fil
 alias fw-apply='sudo nft -f /etc/nftables.conf'               # load the ruleset from the file
 alias fw-reload='sudo systemctl restart nftables'             # reload via the service
 alias fw-status='sudo systemctl status nftables'              # is the service running?
-alias fw-monitor='sudo nft monitor'                           # watch ruleset changes live
+alias fw-monitor='sudo nft monitor'                           # watch RULESET CHANGES live (empty = nothing changing; normal)
 alias fw-save='sudo nft list ruleset | sudo tee /etc/nftables.conf'  # persist running rules to the file
 alias fw-flush='sudo nft flush ruleset'                       # wipe ALL rules (careful — can lock you out)
+# See ACTIVITY, not just rule changes:
+alias fw-counters='sudo nft list ruleset -a'                  # rules with packet/byte counters + handles
+fw-watch() { watch -n1 "sudo nft list ruleset"; }             # live view — see counters climb (needs `watch`)
+alias fw-trace='sudo nft monitor trace'                       # per-packet trace (needs a `meta nftrace set 1` rule)
+alias fw-count-add='sudo nft add rule inet filter forward counter'  # add a counting rule to a chain to measure hits
 
 # ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
