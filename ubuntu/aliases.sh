@@ -203,6 +203,31 @@ ip-who() {
   [ -n "$v" ] && echo "MAC (ARP):  $v"                          # only if on the same L2 network
 }
 
+# Build a who-is table of every host we can find (ARP neighbours + DHCP leases)
+# and REMEMBER it in a file, so hosts stay known even after ARP entries expire.
+# Keyed by MAC. Set CMDBOOK_HOSTS to change the store.  Usage: lan-who
+alias lan-hosts='cat "${CMDBOOK_HOSTS:-$HOME/.cache/cmdbook/lan-hosts}"'  # the saved table (raw)
+lan-who() {
+  local store="${CMDBOOK_HOSTS:-$HOME/.cache/cmdbook/lan-hosts}" leases=/var/lib/misc/dnsmasq.leases
+  local now tmp; now=$(date '+%Y-%m-%d %H:%M'); mkdir -p "$(dirname "$store")"; touch "$store"; tmp=$(mktemp)
+  # live discovery: MAC<TAB>IP<TAB>NAME from the neighbour table and dnsmasq leases
+  { ip neigh 2>/dev/null | awk '/lladdr/{m="";for(i=1;i<=NF;i++)if($i=="lladdr")m=$(i+1); if(m!="")print m"\t"$1"\t"}'
+    [ -f "$leases" ] && awk '{print $2"\t"$3"\t"$4}' "$leases"; } > "$tmp"
+  # merge into the store, keyed by MAC (refresh IP + last-seen, keep best name)
+  awk -F'\t' -v now="$now" '
+    FNR==NR { m=$1; ip[m]=$2; nm[m]=$3; sn[m]=$4; if(!(m in s)){o[++k]=m; s[m]=1} next }
+    { m=$1; if(!(m in s)){o[++k]=m; s[m]=1}; ip[m]=$2; if($3!="")nm[m]=$3; sn[m]=now }
+    END{ for(i=1;i<=k;i++){ n=nm[o[i]]; if(n==""||n=="-")n="-"; printf "%s\t%s\t%s\t%s\n",o[i],ip[o[i]],n,sn[o[i]] } }
+  ' "$store" "$tmp" > "$store.new" && mv "$store.new" "$store"; rm -f "$tmp"
+  # display: fill blank names via reverse DNS, mark who is reachable right now
+  printf '%-16s %-18s %-26s %-16s %s\n' IP MAC NAME LAST-SEEN UP
+  { while IFS=$'\t' read -r m ip nm last; do
+      [ "$nm" = "-" ] && nm=$(dig +short -x "$ip" 2>/dev/null | head -1 | sed 's/\.$//')
+      if ping -c1 -W1 "$ip" >/dev/null 2>&1; then u="yes"; else u="-"; fi
+      printf '%-16s %-18s %-26s %-16s %s\n' "$ip" "$m" "${nm:-—}" "$last" "$u"
+    done < "$store"; } | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n
+}
+
 # ── routing / connectivity health check ─────────────────────────────────────
 # Test the whole router path: forwarding, local IPs, route, internet, DNS, NAT.
 net-doctor() {
