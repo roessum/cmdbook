@@ -329,6 +329,7 @@ alias web-restart='sudo systemctl restart caddy'             # full restart
 alias web-status='sudo systemctl status caddy'               # is it running?
 alias web-log='sudo journalctl -u caddy -f'                  # follow web server logs live
 alias myip='curl -s ifconfig.me; echo'                       # my public IP (compare vs WAN IP for CGNAT)
+unalias dns-check 2>/dev/null || true   # was an alias before; avoid reload breaking on dns-check()
 dns-check() {   # what a domain resolves to (uses getent when dig isn't installed)
   [ -n "$1" ] || { echo "usage: dns-check <domain>"; return 1; }
   if command -v dig >/dev/null 2>&1; then dig +short "$1"

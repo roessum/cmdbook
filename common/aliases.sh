@@ -191,6 +191,7 @@ alias host-show='cat /etc/hosts'                   # show the hosts file
 alias port-test='nc -zv'                           # is a port open?  port-test host 8180
 # Reverse DNS for an IP using whatever is installed (getent works without dig,
 # and on the Pi it even answers from dnsmasq's DHCP names).  rdns 10.0.1.5
+unalias rdns 2>/dev/null || true    # was an alias before; drop it so reload doesn't choke on rdns()
 rdns() {
   local ip="$1" r; [ -n "$ip" ] || { echo "usage: rdns <ip>"; return 1; }
   r=$(getent hosts "$ip" 2>/dev/null | awk '{print $2; exit}')
