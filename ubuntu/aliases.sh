@@ -329,7 +329,11 @@ alias web-restart='sudo systemctl restart caddy'             # full restart
 alias web-status='sudo systemctl status caddy'               # is it running?
 alias web-log='sudo journalctl -u caddy -f'                  # follow web server logs live
 alias myip='curl -s ifconfig.me; echo'                       # my public IP (compare vs WAN IP for CGNAT)
-alias dns-check='dig +short'                                  # what a domain resolves to (add a domain)
+dns-check() {   # what a domain resolves to (uses getent when dig isn't installed)
+  [ -n "$1" ] || { echo "usage: dns-check <domain>"; return 1; }
+  if command -v dig >/dev/null 2>&1; then dig +short "$1"
+  else getent ahosts "$1" 2>/dev/null | awk '{print $1}' | sort -u; fi
+}
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 
 # ── nftables firewall ───────────────────────────────────────────────────────
