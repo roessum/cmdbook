@@ -189,6 +189,7 @@ case $- in *i*) ssh-agent-ensure 2>/dev/null ;; esac   # auto-run in interactive
 # ── /etc/hosts & SSH tunnels ────────────────────────────────────────────────
 alias host-show='cat /etc/hosts'                   # show the hosts file
 alias port-test='nc -zv'                           # is a port open?  port-test host 8180
+alias rdns='dig +short -x'                          # reverse DNS: hostname for an IP (rdns 1.2.3.4)
 host-add() {   # host-add <ip> <name> — add (or replace) an /etc/hosts entry
   local ip="$1" name="$2" tmp
   { [ -n "$ip" ] && [ -n "$name" ]; } || { echo "usage: host-add <ip> <name>"; return 1; }

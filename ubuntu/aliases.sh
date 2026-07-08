@@ -182,6 +182,27 @@ alias link-show='ip link show'                                # full link detail
 alias link-up='sudo ip link set'                              # set an iface up:  link-up wlan0 up
 alias link-stats='ip -s link'                                 # per-interface RX/TX stats
 
+# ── identify a host by IP ───────────────────────────────────────────────────
+# tags: hostname who-is device lookup arp mac reverse-dns dhcp lease netbios mdns
+# Ask an IP who it is from every source at once. Usage: ip-who <ip>
+ip-who() {
+  local ip="$1" v; [ -n "$ip" ] || { echo "usage: ip-who <ip>"; return 1; }
+  echo "── $ip ──"
+  if ping -c1 -W1 "$ip" >/dev/null 2>&1; then echo "ping:       up"; else echo "ping:       no reply"; fi
+  v=$(dig +short -x "$ip" 2>/dev/null | head -1); echo "rDNS:       ${v:-—}"
+  if [ -f /var/lib/misc/dnsmasq.leases ]; then                 # name the device gave DHCP
+    awk -v ip="$ip" '$3==ip{print "DHCP-lease:  "$4"  (MAC "$2")"}' /var/lib/misc/dnsmasq.leases
+  fi
+  if command -v nmblookup >/dev/null 2>&1; then                # Windows/SMB name
+    v=$(nmblookup -A "$ip" 2>/dev/null | awk '/<00>/ && !/GROUP/{print $1; exit}'); [ -n "$v" ] && echo "NetBIOS:    $v"
+  fi
+  if command -v avahi-resolve >/dev/null 2>&1; then            # .local (Apple/Linux)
+    v=$(avahi-resolve -a "$ip" 2>/dev/null | awk '{print $2}'); [ -n "$v" ] && echo "mDNS:       $v"
+  fi
+  v=$(ip neigh show "$ip" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}')
+  [ -n "$v" ] && echo "MAC (ARP):  $v"                          # only if on the same L2 network
+}
+
 # ── routing / connectivity health check ─────────────────────────────────────
 # Test the whole router path: forwarding, local IPs, route, internet, DNS, NAT.
 net-doctor() {
