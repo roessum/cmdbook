@@ -356,6 +356,27 @@ fw-watch() { watch -n1 "sudo nft list ruleset"; }             # live view — se
 alias fw-reset='sudo nft reset counters'                      # zero all counters, then fw-watch to measure fresh
 alias fw-trace='sudo nft monitor trace'                       # per-packet trace (needs a `meta nftrace set 1` rule)
 alias fw-count-add='sudo nft add rule inet filter forward counter'  # add a counter to the forward chain (adjust table/chain)
+# Add a `counter` to EVERY rule so you can see hits everywhere. Safe: counters
+# don't change accept/drop logic. Validates + backs up before applying.
+fw-count-all() {
+  local new bak; new=$(mktemp); bak="/etc/nftables.conf.bak-$(date +%Y%m%d-%H%M%S)"
+  echo "flush ruleset" > "$new"                       # so re-applying replaces, not duplicates
+  sudo nft list ruleset | awk '
+    /^[[:space:]]*chain .*\{/ { inchain=1; print; next }
+    inchain && /^[[:space:]]*}/ { inchain=0; print; next }
+    inchain {
+      if ($0 ~ /type .* hook .* priority/ || $0 ~ /^[[:space:]]*(#|$)/ ||
+          $0 ~ /(^|[[:space:]])counter([[:space:]]|$)/) { print; next }   # skip decl/comment/already-counted
+      match($0, /^[[:space:]]*/); print substr($0,1,RLENGTH) "counter " substr($0,RLENGTH+1); next
+    }
+    { print }
+  ' >> "$new"
+  if ! sudo nft -c -f "$new" 2>&1; then echo "✗ generated ruleset is invalid — nothing changed"; rm -f "$new"; return 1; fi
+  sudo nft list ruleset | sudo tee "$bak" >/dev/null && echo "backup: $bak"
+  if sudo nft -f "$new"; then echo "✓ counter added to every rule — 'fw' or 'fw-watch' to see hits; 'fw-save' to persist"
+  else echo "✗ apply failed — restore with: sudo nft flush ruleset && sudo nft -f $bak"; fi
+  rm -f "$new"
+}
 
 # ── ssh-agent (Pi key) ──────────────────────────────────────────────────────
 alias ssh-load='eval "$(ssh-agent -s)" && ssh-add ~/.ssh/pi'  # start agent + unlock the pi key once
