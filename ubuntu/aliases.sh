@@ -337,6 +337,22 @@ dns-check() {   # what a domain resolves to (uses getent when dig isn't installe
 }
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 
+# ── live traffic / packet capture ───────────────────────────────────────────
+# tags: tcpdump sniff capture packets monitor traffic
+# Watch packets to/from a host across ALL interfaces (shows which iface + flags).
+# traffic <host> [port]   e.g. traffic 10.0.2.67 3389   (needs tcpdump)
+traffic() {
+  local h="$1" p="$2"; [ -n "$h" ] || { echo "usage: traffic <host> [port]"; return 1; }
+  command -v tcpdump >/dev/null 2>&1 || { echo "tcpdump missing — sudo apt install tcpdump"; return 1; }
+  if [ -n "$p" ]; then sudo tcpdump -ni any "host $h and port $p"
+  else sudo tcpdump -ni any "host $h"; fi
+}
+alias traffic-if='sudo tcpdump -ni'                           # capture on one iface: traffic-if eth0 [filter]
+alias traffic-wan='sudo tcpdump -ni eth0 not port 22'         # everything crossing the WAN (minus your ssh)
+# Live active-connection view via conntrack-tools (sudo apt install conntrack).
+conns() { sudo conntrack -L 2>/dev/null | grep "${1:-.}"; }   # conns [ip]  — tracked NAT connections
+conn-watch() { watch -n1 "sudo conntrack -L 2>/dev/null | grep '${1:-.}'"; }  # conn-watch <ip> — live
+
 # ── nftables firewall ───────────────────────────────────────────────────────
 # tags: iptables firewall nat masquerade packet-filter port-forward
 alias fw='sudo nft list ruleset'                              # show the whole ruleset (incl. counters, if rules have them)
