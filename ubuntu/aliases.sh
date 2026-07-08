@@ -140,6 +140,26 @@ alias wg-conf='sudo nano /etc/wireguard/wg0.conf'            # edit the tunnel c
 alias wg-latest='sudo wg show wg0 latest-handshakes'          # last handshake per peer
 # make a keypair:  prints private key, writes public key next to it
 wg-keys() { wg genkey | sudo tee /etc/wireguard/privatekey | wg pubkey | sudo tee /etc/wireguard/publickey; }
+# One-shot WireGuard health check: interface, peers, handshake age, boot, NAT.
+wg-doctor() {
+  local P="✓" W="⚠" F="✗" iface=wg0 a
+  echo "── wg-doctor ($iface) ──"
+  ip link show "$iface" >/dev/null 2>&1 || { echo "$F $iface is down — bring it up with 'wg-up'"; return 1; }
+  echo "$P interface up"
+  a=$(ip -4 -o addr show "$iface" 2>/dev/null | awk '{print $4; exit}'); echo "addr:       ${a:-none}"
+  echo "peers:      $(sudo wg show "$iface" peers 2>/dev/null | grep -c .)"
+  sudo wg show "$iface" latest-handshakes 2>/dev/null | while read -r pk ts; do
+    local age key="${pk:0:12}"
+    if [ "${ts:-0}" -gt 0 ] 2>/dev/null; then
+      age=$(( $(date +%s) - ts ))
+      [ "$age" -lt 180 ] && echo "$P handshake ${age}s ago  (${key}…)" \
+                         || echo "$W last handshake ${age}s ago  (${key}…) — idle or down"
+    else echo "$F peer ${key}… never handshaked — check endpoint/keys/firewall"; fi
+  done
+  systemctl is-enabled --quiet wg-quick@wg0 2>/dev/null && echo "$P enabled at boot" || echo "$W not enabled at boot — 'wg-enable'"
+  [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = 1 ] && echo "$P ip_forward on" || echo "$F ip_forward off — clients can't be routed"
+  sudo nft list ruleset 2>/dev/null | grep -q masquerade && echo "$P NAT masquerade present" || echo "$W no masquerade — wg clients won't reach the internet"
+}
 
 # ── DNS ─────────────────────────────────────────────────────────────────────
 # tags: resolver nameserver resolv systemd-resolved lookup
@@ -189,7 +209,7 @@ ip-who() {
   local ip="$1" v; [ -n "$ip" ] || { echo "usage: ip-who <ip>"; return 1; }
   echo "── $ip ──"
   if ping -c1 -W1 "$ip" >/dev/null 2>&1; then echo "ping:       up"; else echo "ping:       no reply"; fi
-  v=$(dig +short -x "$ip" 2>/dev/null | head -1); echo "rDNS:       ${v:-—}"
+  echo "rDNS:       $(rdns "$ip")"
   if [ -f /var/lib/misc/dnsmasq.leases ]; then                 # name the device gave DHCP
     awk -v ip="$ip" '$3==ip{print "DHCP-lease:  "$4"  (MAC "$2")"}' /var/lib/misc/dnsmasq.leases
   fi
@@ -222,10 +242,21 @@ lan-who() {
   # display: fill blank names via reverse DNS, mark who is reachable right now
   printf '%-16s %-18s %-26s %-16s %s\n' IP MAC NAME LAST-SEEN UP
   { while IFS=$'\t' read -r m ip nm last; do
-      [ "$nm" = "-" ] && nm=$(dig +short -x "$ip" 2>/dev/null | head -1 | sed 's/\.$//')
+      [ "$nm" = "-" ] && { nm=$(rdns "$ip"); [ "$nm" = "—" ] && nm=""; }
       if ping -c1 -W1 "$ip" >/dev/null 2>&1; then u="yes"; else u="-"; fi
       printf '%-16s %-18s %-26s %-16s %s\n' "$ip" "$m" "${nm:-—}" "$last" "$u"
     done < "$store"; } | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n
+}
+# Ping-sweep a subnet so every live host lands in ARP, then show lan-who.
+# Usage: lan-scan [CIDR]  (default: the /24 of your first private LAN address)
+lan-scan() {
+  local cidr="$1" base i
+  [ -z "$cidr" ] && cidr=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | grep -E '^(10\.|192\.168\.|172\.)' | head -1)
+  base=$(echo "$cidr" | cut -d/ -f1 | cut -d. -f1-3)
+  [ -n "$base" ] || { echo "usage: lan-scan <CIDR e.g. 10.0.1.0/24>"; return 1; }
+  echo "sweeping ${base}.1-254 ..."
+  for i in $(seq 1 254); do ping -c1 -W1 "${base}.${i}" >/dev/null 2>&1 & done; wait
+  lan-who
 }
 
 # ── routing / connectivity health check ─────────────────────────────────────
@@ -273,6 +304,22 @@ net-doctor() {
   echo "──────────────────────────────────────────────"
 }
 alias net-test='net-doctor'                                   # alias for net-doctor
+# Will the router STILL route after a reboot? Checks persisted config, not the
+# live state — this is what catches "works now, breaks after restart".
+router-persist() {
+  local P="✓" F="✗"
+  echo "── router-persist (survives a reboot?) ──"
+  if grep -rqsE '^[[:space:]]*net\.ipv4\.ip_forward[[:space:]]*=[[:space:]]*1' /etc/sysctl.conf /etc/sysctl.d/ 2>/dev/null
+    then echo "$P ip_forward persisted in sysctl"
+    else echo "$F ip_forward NOT persisted — echo 'net.ipv4.ip_forward=1' | sudo tee /etc/sysctl.d/99-router.conf"; fi
+  if systemctl is-enabled --quiet nftables 2>/dev/null
+    then echo "$P nftables.service enabled at boot"
+    else echo "$F nftables NOT enabled — sudo systemctl enable nftables"; fi
+  if sudo grep -qs masquerade /etc/nftables.conf 2>/dev/null
+    then echo "$P masquerade saved in /etc/nftables.conf"
+    else echo "$F masquerade NOT saved — live rules will vanish on reboot: run 'fw-save'"; fi
+  echo "→ if internet works now but dies after reboot, your live rules aren't saved: 'fw-save'"
+}
 
 # ── web server (Caddy — auto HTTPS) ─────────────────────────────────────────
 alias web-conf='sudo nano /etc/caddy/Caddyfile'               # edit the site config

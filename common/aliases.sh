@@ -189,7 +189,32 @@ case $- in *i*) ssh-agent-ensure 2>/dev/null ;; esac   # auto-run in interactive
 # ── /etc/hosts & SSH tunnels ────────────────────────────────────────────────
 alias host-show='cat /etc/hosts'                   # show the hosts file
 alias port-test='nc -zv'                           # is a port open?  port-test host 8180
-alias rdns='dig +short -x'                          # reverse DNS: hostname for an IP (rdns 1.2.3.4)
+# Reverse DNS for an IP using whatever is installed (getent works without dig,
+# and on the Pi it even answers from dnsmasq's DHCP names).  rdns 10.0.1.5
+rdns() {
+  local ip="$1" r; [ -n "$ip" ] || { echo "usage: rdns <ip>"; return 1; }
+  r=$(getent hosts "$ip" 2>/dev/null | awk '{print $2; exit}')
+  [ -z "$r" ] && command -v dig  >/dev/null 2>&1 && r=$(dig +short -x "$ip" 2>/dev/null | head -1 | sed 's/\.$//')
+  [ -z "$r" ] && command -v host >/dev/null 2>&1 && r=$(host "$ip" 2>/dev/null | awk '/name pointer/{print $NF}' | head -1 | sed 's/\.$//')
+  echo "${r:-—}"
+}
+# tags: connectivity test ping traceroute route port reachable dns resolve
+# Test the network path to a host: DNS, which route/interface, ping, opt. port.
+# Usage: reach <host> [port]
+reach() {
+  local h="$1" p="$2" ip tgt; [ -n "$h" ] || { echo "usage: reach <host> [port]"; return 1; }
+  echo "── reach $h ──"
+  ip=$(getent hosts "$h" 2>/dev/null | awk '{print $1; exit}')
+  [ -z "$ip" ] && command -v dig >/dev/null 2>&1 && ip=$(dig +short "$h" 2>/dev/null | tail -1)
+  echo "resolves:   ${ip:-FAILED (DNS)}"
+  tgt="${ip:-$h}"
+  if command -v ip >/dev/null 2>&1; then echo "route:      $(ip route get "$tgt" 2>/dev/null | head -1 | sed 's/  */ /g')"
+  else echo "route:      $(route -n get "$tgt" 2>/dev/null | awk '/interface:|gateway:/{printf $2" "}')"; fi
+  if ping -c2 -W1 "$tgt" >/dev/null 2>&1 || ping -c2 -t2 "$tgt" >/dev/null 2>&1; then echo "ping:       ok"; else echo "ping:       no reply"; fi
+  if [ -n "$p" ]; then
+    if nc -z -w2 "$tgt" "$p" 2>/dev/null || nc -z -G2 "$tgt" "$p" 2>/dev/null; then echo "port $p:  open"; else echo "port $p:  closed/filtered"; fi
+  fi
+}
 host-add() {   # host-add <ip> <name> — add (or replace) an /etc/hosts entry
   local ip="$1" name="$2" tmp
   { [ -n "$ip" ] && [ -n "$name" ]; } || { echo "usage: host-add <ip> <name>"; return 1; }
