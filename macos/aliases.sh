@@ -32,3 +32,14 @@ relay-info() {
   if [ -n "$1" ]; then ssh "$1" 'docker exec plaain-relay cat /config/deploy-info.json'
   else docker exec plaain-relay cat /config/deploy-info.json; fi
 }
+
+# ── wireguard (macOS, via wireguard-tools: brew install wireguard-tools) ─────
+# tags: vpn tunnel wg peer
+# Config files live in  $(brew --prefix)/etc/wireguard/<name>.conf
+alias wg-show='sudo wg show'                                  # active tunnels, peers, handshakes
+alias wg-dir='echo "$(brew --prefix)/etc/wireguard"'          # where the .conf files live
+alias wg-list='ls "$(brew --prefix)/etc/wireguard/" 2>/dev/null || echo "no configs (App Store app keeps them in-app)"'
+alias wg-up='sudo wg-quick up'                                # wg-up <tunnel>    bring a tunnel up
+alias wg-down='sudo wg-quick down'                            # wg-down <tunnel>  bring it down
+wg-reapply() { local t="${1:?usage: wg-reapply <tunnel>}"; sudo wg-quick down "$t" 2>/dev/null; sudo wg-quick up "$t"; }  # bounce/reapply a tunnel
+wg-edit() { sudo "${EDITOR:-nano}" "$(brew --prefix)/etc/wireguard/${1:?usage: wg-edit <tunnel>}.conf"; }  # edit a tunnel's config
