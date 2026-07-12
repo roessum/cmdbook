@@ -84,6 +84,14 @@ cmdbook() {
   _cmdbook_filter "$f" "$filter" ""
 }
 
+# ── list files: newest / oldest / biggest ───────────────────────────────────
+# tags: ls sort date newest oldest recent latest largest size head tail first last
+alias first='head -n'                              # keep first N lines:  somecmd | first 10
+alias last='tail -n'                               # keep last N lines:   somecmd | last 10
+newest() { ls -lht  | head -n "$(( ${1:-10} + 1 ))"; }   # the N newest files here (default 10)
+oldest() { ls -lhtr | head -n "$(( ${1:-10} + 1 ))"; }   # the N oldest files here
+biggest() { ls -lhS | head -n "$(( ${1:-10} + 1 ))"; }   # the N largest files here
+
 # ── git: status & history ──────────────────────────────────────────────────
 alias gs='git status -sb'                          # short status + branch info
 alias gl='git log --oneline --graph --all'         # compact, visual history
