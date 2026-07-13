@@ -348,10 +348,14 @@ alias web-status='sudo systemctl status caddy'               # is it running?
 alias web-log='sudo journalctl -u caddy -f'                  # follow web server logs live
 alias myip='curl -s ifconfig.me; echo'                       # my public IP (compare vs WAN IP for CGNAT)
 unalias dns-check 2>/dev/null || true   # was an alias before; avoid reload breaking on dns-check()
-dns-check() {   # what a domain resolves to (uses getent when dig isn't installed)
+dns-check() {   # what a domain resolves to (uses getent/nslookup when dig isn't installed)
   [ -n "$1" ] || { echo "usage: dns-check <domain>"; return 1; }
-  if command -v dig >/dev/null 2>&1; then dig +short "$1"
-  else getent ahosts "$1" 2>/dev/null | awk '{print $1}' | sort -u; fi
+  local out
+  if command -v dig >/dev/null 2>&1; then dig +short "$1"; return; fi
+  out=$(getent ahosts "$1" 2>/dev/null | awk '{print $1}' | sort -u)
+  [ -z "$out" ] && command -v nslookup >/dev/null 2>&1 && out=$(nslookup "$1" 2>/dev/null | awk '/^Address: /{print $2}')
+  if [ -n "$out" ]; then printf '%s\n' "$out"
+  else echo "(no answer — $1 didn't resolve; try 'getent hosts google.com' to test the Pi's own DNS)"; fi
 }
 alias ports-open='sudo ss -tlnp'                              # which ports are listening locally
 

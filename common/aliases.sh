@@ -20,6 +20,7 @@ cmd-update() {
   git -C "$d" pull && . "$d/load.sh" && echo "cmdbook updated + reloaded ✓"
 }
 alias cmd-edit='${EDITOR:-nano} "${CMDBOOK_DIR:-$HOME/cmdbook}"'   # open the repo to add aliases
+alias cmd-reload='exec "$SHELL"'                   # fresh shell — drops ghosts of removed/renamed aliases
 # List when each alias/function was first added (from git history), newest last.
 # cmd-new [N] shows the N most recently added (default 20).
 cmd-new() {
