@@ -161,13 +161,30 @@ wg-doctor() {
   sudo nft list ruleset 2>/dev/null | grep -q masquerade && echo "$P NAT masquerade present" || echo "$W no masquerade — wg clients won't reach the internet"
 }
 
-# ── DNS ─────────────────────────────────────────────────────────────────────
-# tags: resolver nameserver resolv systemd-resolved lookup
-alias dns-status='resolvectl status'                          # current DNS servers per link
-alias dns-flush='sudo resolvectl flush-caches'                # clear the DNS cache
-alias dns-query='resolvectl query'                            # resolve a name (add a hostname)
-alias dns-conf='cat /etc/resolv.conf'                        # what's actually being used
-alias dns-restart='sudo systemctl restart systemd-resolved'   # restart the resolver
+# ── DNS (dnsmasq is the router's resolver + cache) ──────────────────────────
+# tags: resolver nameserver resolv systemd-resolved lookup dnsmasq cache upstream server
+# One-shot overview: service, upstream servers, what it listens on, leases.
+dns() {
+  echo "── DNS overview ──"
+  systemctl is-active --quiet dnsmasq 2>/dev/null && echo "dnsmasq:    running" || echo "dnsmasq:    NOT running  (dns-restart)"
+  echo "upstream:   $(awk '/^nameserver/{print $2}' /etc/resolv.conf 2>/dev/null | paste -sd' ' -)"
+  grep -hEs '^server=' /etc/dnsmasq.conf /etc/dnsmasq.d/* 2>/dev/null | sed 's/^server=/  forced -> /'
+  echo "listening on :53:"
+  sudo ss -tulnp 2>/dev/null | awk '$5 ~ /:53$/ {print "  "$1"  "$5}'
+  [ -f /var/lib/misc/dnsmasq.leases ] && echo "leases:     $(wc -l < /var/lib/misc/dnsmasq.leases) active"
+  echo "(dns-stats=cache hits/misses · dns-log=live queries · dns-check <name>=resolve)"
+}
+dns-conf() {   # the DNS config: dnsmasq's own settings + the system resolver
+  echo "# dnsmasq:"; grep -hEs '^(server|address|no-resolv|cache-size|domain)=' /etc/dnsmasq.conf /etc/dnsmasq.d/* 2>/dev/null
+  echo "# /etc/resolv.conf:"; cat /etc/resolv.conf 2>/dev/null
+}
+dns-stats() {  # dnsmasq cache stats (hits/misses/size) — dumped to the journal via SIGUSR1
+  sudo kill -USR1 "$(pidof dnsmasq)" 2>/dev/null && sleep 1
+  sudo journalctl -u dnsmasq --since "3 sec ago" --no-pager 2>/dev/null | grep -iE 'cache|queries|forwarded|served' | tail
+}
+alias dns-flush='sudo kill -HUP "$(pidof dnsmasq)"'           # clear dnsmasq's cache (SIGHUP)
+alias dns-log='sudo journalctl -u dnsmasq -f'                # follow DNS activity live (detail needs log-queries)
+alias dns-restart='sudo systemctl restart dnsmasq'           # restart the DNS/DHCP server
 
 # ── DHCP (dnsmasq) ──────────────────────────────────────────────────────────
 # tags: lease ip-assignment address-pool
