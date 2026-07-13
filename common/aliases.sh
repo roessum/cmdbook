@@ -163,6 +163,26 @@ docker-ip() { docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress
 alias dlogs='docker logs -f'                       # follow a container's logs (add a name)
 alias dsh='docker exec -it'                        # shell into a container:  dsh <name> bash
 
+# ── 7-zip: password-protected archives ──────────────────────────────────────
+# tags: 7z p7zip zip compress archive encrypt password decrypt unpack extract lock
+# Needs p7zip:  Debian/Pi 'sudo apt install p7zip-full',  macOS 'brew install p7zip'.
+# (These are functions, not aliases — a name starting with a digit only works as a function.)
+_7z() {   # run 7z or 7za, whichever exists
+  command -v 7z  >/dev/null 2>&1 && { 7z  "$@"; return; }
+  command -v 7za >/dev/null 2>&1 && { 7za "$@"; return; }
+  echo "7z not found — install p7zip-full (apt) or p7zip (brew)"; return 1
+}
+# Pack + encrypt (AES-256). Prompts for a password and hides file names too.
+7zenc() {
+  local out="$1"; shift
+  { [ -n "$out" ] && [ -n "$1" ]; } || { echo "usage: 7zenc <archive.7z> <files...>"; return 1; }
+  _7z a -p -mhe=on "$out" "$@"
+}
+# Extract; prompts for the password if the archive is encrypted.  7zdec <a.7z> [destdir]
+7zdec() { [ -n "$1" ] || { echo "usage: 7zdec <archive.7z> [destdir]"; return 1; }; _7z x "$1" ${2:+-o"$2"}; }
+7zls() { [ -n "$1" ] || { echo "usage: 7zls <archive.7z>"; return 1; }; _7z l "$1"; }   # list contents (needs pw if encrypted)
+7zt()  { [ -n "$1" ] || { echo "usage: 7zt <archive.7z>"; return 1; }; _7z t "$1"; }    # test integrity / verify the password
+
 # ── ssh ─────────────────────────────────────────────────────────────────────
 alias sshkey='cat ~/.ssh/id_ed25519.pub'           # print my SSH public key (add to GitHub)
 alias sshtest='ssh -T git@github.com'              # test the GitHub SSH connection
