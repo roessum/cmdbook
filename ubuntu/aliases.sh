@@ -174,6 +174,7 @@ dns() {
   [ -f /var/lib/misc/dnsmasq.leases ] && echo "leases:     $(wc -l < /var/lib/misc/dnsmasq.leases) active"
   echo "(dns-stats=cache hits/misses · dns-log=live queries · dns-check <name>=resolve)"
 }
+unalias dns-conf 2>/dev/null || true   # was an alias before; avoid reload breaking on dns-conf()
 dns-conf() {   # the DNS config: dnsmasq's own settings + the system resolver
   echo "# dnsmasq:"; grep -hEs '^(server|address|no-resolv|cache-size|domain)=' /etc/dnsmasq.conf /etc/dnsmasq.d/* 2>/dev/null
   echo "# /etc/resolv.conf:"; cat /etc/resolv.conf 2>/dev/null
