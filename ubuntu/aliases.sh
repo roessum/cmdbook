@@ -379,20 +379,27 @@ alias web-restart='sudo systemctl restart caddy'             # full restart
 alias web-status='sudo systemctl status caddy'               # is it running?
 alias web-log='sudo journalctl -u caddy -f'                  # follow web server logs live
 alias myip='curl -s ifconfig.me; echo'                       # my public IP (compare vs WAN IP for CGNAT)
-# tags: reverse-proxy vhost site domain hostname docker
+# tags: reverse-proxy vhost site domain hostname docker https tls
 # ONE command: make a local name AND reverse-proxy it to a backend, then reload.
-#   caddy-add wireguard.lan localhost:51821   -> http://wireguard.lan
+#   caddy-add wireguard.lan localhost:51821         -> http://wireguard.lan
+#   caddy-add wireguard.lan localhost:51821 tls     -> https://wireguard.lan (self-signed)
 # Points the name at this Pi (via dns-add) so LAN clients reach Caddy.
 caddy-add() {
-  local name="$1" up="$2" dir=/etc/caddy/cmdbook.d main=/etc/caddy/Caddyfile myip
-  { [ -n "$name" ] && [ -n "$up" ]; } || { echo "usage: caddy-add <hostname> <host:port>"; return 1; }
+  local name="$1" up="$2" mode="$3" dir=/etc/caddy/cmdbook.d main=/etc/caddy/Caddyfile myip scheme=http
+  { [ -n "$name" ] && [ -n "$up" ]; } || { echo "usage: caddy-add <hostname> <host:port> [tls]"; return 1; }
   sudo mkdir -p "$dir"
   grep -qsF 'import cmdbook.d/*' "$main" || echo 'import cmdbook.d/*' | sudo tee -a "$main" >/dev/null
-  printf 'http://%s {\n\treverse_proxy %s\n}\n' "$name" "$up" | sudo tee "$dir/$name.caddy" >/dev/null
+  if [ "$mode" = tls ]; then          # HTTPS with Caddy's own internal CA (self-signed)
+    scheme=https
+    printf '%s {\n\ttls internal\n\treverse_proxy %s\n}\n' "$name" "$up" | sudo tee "$dir/$name.caddy" >/dev/null
+  else                                # plain HTTP (no cert warning)
+    printf 'http://%s {\n\treverse_proxy %s\n}\n' "$name" "$up" | sudo tee "$dir/$name.caddy" >/dev/null
+  fi
   sudo systemctl reload caddy || { echo "caddy config error — check 'web-test'"; return 1; }
   myip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | grep -E '^(10\.|192\.168\.|172\.)' | cut -d/ -f1 | head -1)
   dns-add "$name" "$myip"
-  echo "✓ http://$name  ->  $up   (dns: $name -> $myip)"
+  echo "✓ $scheme://$name  ->  $up   (dns: $name -> $myip)"
+  [ "$mode" = tls ] && echo "  note: self-signed cert — browsers warn until you trust Caddy's root CA"
 }
 caddy-del() {   # remove a site made with caddy-add.  caddy-del wireguard.lan
   local name="$1"; [ -n "$name" ] || { echo "usage: caddy-del <hostname>"; return 1; }

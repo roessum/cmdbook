@@ -155,6 +155,14 @@ alias gcl='git clone'                              # clone a repo (add a URL)
 alias gtag='git tag -a'                            # annotated tag (add  v1.0 -m "msg")
 alias gpushtags='git push --tags'                  # push all tags
 
+# ── docker ──────────────────────────────────────────────────────────────────
+# tags: container image compose ip port
+alias dps='docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"'  # readable: name, ports, status
+alias dpsa='docker ps -a --format "table {{.Names}}\t{{.Status}}"'          # incl. stopped
+docker-ip() { docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "${1:?usage: docker-ip <container>}"; }  # a container's internal IP(s) — for a Caddy upstream
+alias dlogs='docker logs -f'                       # follow a container's logs (add a name)
+alias dsh='docker exec -it'                        # shell into a container:  dsh <name> bash
+
 # ── ssh ─────────────────────────────────────────────────────────────────────
 alias sshkey='cat ~/.ssh/id_ed25519.pub'           # print my SSH public key (add to GitHub)
 alias sshtest='ssh -T git@github.com'              # test the GitHub SSH connection
