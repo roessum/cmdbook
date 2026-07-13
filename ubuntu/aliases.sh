@@ -209,6 +209,15 @@ dns-del() {   # remove a local DNS name you added.  dns-del wireguard.lan
   [ -n "$name" ] || { echo "usage: dns-del <name>"; return 1; }
   sudo sed -i "\|/$name/|d" "$f" 2>/dev/null && sudo systemctl restart dnsmasq && echo "removed: $name"
 }
+# Point one name at another (CNAME).  dns-cname www.lan wireguard.lan
+# The target must be a name dnsmasq already knows (e.g. from dns-add / a lease).
+dns-cname() {
+  local alias="$1" target="$2" f=/etc/dnsmasq.d/cmdbook-records.conf
+  { [ -n "$alias" ] && [ -n "$target" ]; } || { echo "usage: dns-cname <alias> <target-name>"; return 1; }
+  sudo touch "$f"; sudo sed -i "\|^cname=$alias,|d" "$f" 2>/dev/null
+  echo "cname=$alias,$target" | sudo tee -a "$f" >/dev/null
+  sudo systemctl restart dnsmasq && echo "cname: $alias -> $target"
+}
 
 # ── DHCP (dnsmasq) ──────────────────────────────────────────────────────────
 # tags: lease ip-assignment address-pool
@@ -370,6 +379,27 @@ alias web-restart='sudo systemctl restart caddy'             # full restart
 alias web-status='sudo systemctl status caddy'               # is it running?
 alias web-log='sudo journalctl -u caddy -f'                  # follow web server logs live
 alias myip='curl -s ifconfig.me; echo'                       # my public IP (compare vs WAN IP for CGNAT)
+# tags: reverse-proxy vhost site domain hostname docker
+# ONE command: make a local name AND reverse-proxy it to a backend, then reload.
+#   caddy-add wireguard.lan localhost:51821   -> http://wireguard.lan
+# Points the name at this Pi (via dns-add) so LAN clients reach Caddy.
+caddy-add() {
+  local name="$1" up="$2" dir=/etc/caddy/cmdbook.d main=/etc/caddy/Caddyfile myip
+  { [ -n "$name" ] && [ -n "$up" ]; } || { echo "usage: caddy-add <hostname> <host:port>"; return 1; }
+  sudo mkdir -p "$dir"
+  grep -qsF 'import cmdbook.d/*' "$main" || echo 'import cmdbook.d/*' | sudo tee -a "$main" >/dev/null
+  printf 'http://%s {\n\treverse_proxy %s\n}\n' "$name" "$up" | sudo tee "$dir/$name.caddy" >/dev/null
+  sudo systemctl reload caddy || { echo "caddy config error — check 'web-test'"; return 1; }
+  myip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | grep -E '^(10\.|192\.168\.|172\.)' | cut -d/ -f1 | head -1)
+  dns-add "$name" "$myip"
+  echo "✓ http://$name  ->  $up   (dns: $name -> $myip)"
+}
+caddy-del() {   # remove a site made with caddy-add.  caddy-del wireguard.lan
+  local name="$1"; [ -n "$name" ] || { echo "usage: caddy-del <hostname>"; return 1; }
+  sudo rm -f "/etc/caddy/cmdbook.d/$name.caddy" && sudo systemctl reload caddy
+  dns-del "$name"; echo "removed $name"
+}
+alias caddy-list='ls /etc/caddy/cmdbook.d/ 2>/dev/null; echo "--- blocks ---"; sudo grep -rHE "^http|reverse_proxy" /etc/caddy/cmdbook.d/ 2>/dev/null | sed "s|/etc/caddy/cmdbook.d/||"'  # sites made with caddy-add
 unalias dns-check 2>/dev/null || true   # was an alias before; avoid reload breaking on dns-check()
 dns-check() {   # what a domain resolves to (uses getent/nslookup when dig isn't installed)
   [ -n "$1" ] || { echo "usage: dns-check <domain>"; return 1; }
