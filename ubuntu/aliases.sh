@@ -186,6 +186,29 @@ dns-stats() {  # dnsmasq cache stats (hits/misses/size) — dumped to the journa
 alias dns-flush='sudo kill -HUP "$(pidof dnsmasq)"'           # clear dnsmasq's cache (SIGHUP)
 alias dns-log='sudo journalctl -u dnsmasq -f'                # follow DNS activity live (detail needs log-queries)
 alias dns-restart='sudo systemctl restart dnsmasq'           # restart the DNS/DHCP server
+# List every local DNS record the Pi answers for: static, custom, and DHCP.
+dns-records() {
+  echo "── static (/etc/hosts) ──"
+  grep -vE '^\s*(#|$)' /etc/hosts 2>/dev/null | sed 's/^/  /'
+  echo "── custom dnsmasq (address / host-record / cname) ──"
+  grep -hEs '^(address=|host-record=|cname=)' /etc/dnsmasq.conf /etc/dnsmasq.d/* 2>/dev/null | sed 's/^/  /' || true
+  echo "── DHCP-lease hostnames (dynamic) ──"
+  [ -f /var/lib/misc/dnsmasq.leases ] && awk '$4!="*"{printf "  %-24s -> %s\n",$4,$3}' /var/lib/misc/dnsmasq.leases
+}
+# Create a local DNS name pointing at an IP.  dns-add wireguard.lan 10.0.3.2
+# (Prefer .lan/.home over .local — .local collides with mDNS on Apple devices.)
+dns-add() {
+  local name="$1" ip="$2" f=/etc/dnsmasq.d/cmdbook-records.conf
+  { [ -n "$name" ] && [ -n "$ip" ]; } || { echo "usage: dns-add <name> <ip>"; return 1; }
+  sudo touch "$f"; sudo sed -i "\|/$name/|d" "$f" 2>/dev/null       # replace any existing entry
+  echo "address=/$name/$ip" | sudo tee -a "$f" >/dev/null
+  sudo systemctl restart dnsmasq && echo "added: $name -> $ip  (dns-check $name to verify)"
+}
+dns-del() {   # remove a local DNS name you added.  dns-del wireguard.lan
+  local name="$1" f=/etc/dnsmasq.d/cmdbook-records.conf
+  [ -n "$name" ] || { echo "usage: dns-del <name>"; return 1; }
+  sudo sed -i "\|/$name/|d" "$f" 2>/dev/null && sudo systemctl restart dnsmasq && echo "removed: $name"
+}
 
 # ── DHCP (dnsmasq) ──────────────────────────────────────────────────────────
 # tags: lease ip-assignment address-pool
