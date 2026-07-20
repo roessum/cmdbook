@@ -407,6 +407,55 @@ caddy-del() {   # remove a site made with caddy-add.  caddy-del wireguard.lan
   dns-del "$name"; echo "removed $name"
 }
 alias caddy-list='ls /etc/caddy/cmdbook.d/ 2>/dev/null; echo "--- blocks ---"; sudo grep -rHE "^http|reverse_proxy" /etc/caddy/cmdbook.d/ 2>/dev/null | sed "s|/etc/caddy/cmdbook.d/||"'  # sites made with caddy-add
+
+# ── Caddy: real Let's Encrypt certs via Hetzner DNS-01 ──────────────────────
+# tags: caddy tls https letsencrypt acme dns-01 hetzner certificate cert renew
+# The Pi isn't reachable from the internet on :80, so certs are issued with the
+# DNS-01 challenge. Two things that WILL bite you:
+#   1. Plugin version: use v2.0.1 (new api.hetzner.cloud). v1.0.0 targets the
+#      retired dns.hetzner.com API and fails with: invalid character '<'
+#   2. Token type: a Hetzner CLOUD project token — console.hetzner.cloud ->
+#      your project -> Security -> API Tokens -> Read & Write. The old DNS
+#      console token does NOT work. It lives in /etc/caddy/caddy.env.
+# Also: point the domain's A-record at the Pi's LAN IP (e.g. 10.0.2.1).
+alias caddy-env='sudo nano /etc/caddy/caddy.env'              # holds HETZNER_API_TOKEN=...
+alias caddy-plugins='caddy list-modules | grep -i dns'        # verify the hetzner DNS plugin is built in
+# Rebuild Caddy with the Hetzner DNS plugin (default v2.0.1 — pin it!).
+caddy-build() {
+  local ver="${1:-v2.0.1}" tmp
+  command -v xcaddy >/dev/null 2>&1 || { echo "xcaddy missing: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest"; return 1; }
+  tmp=$(mktemp -d) || return 1
+  ( cd "$tmp" && xcaddy build --with "github.com/caddy-dns/hetzner@$ver" ) || { rm -rf "$tmp"; echo "build failed"; return 1; }
+  [ -f /usr/bin/caddy.apt ] || sudo cp -a /usr/bin/caddy /usr/bin/caddy.apt   # keep the apt build as a fallback
+  sudo install -m 755 "$tmp/caddy" /usr/bin/caddy && sudo systemctl restart caddy
+  rm -rf "$tmp"; caddy version; caddy list-modules | grep -i hetzner
+}
+# Add a PUBLIC site with a real cert via DNS-01.  caddy-site rutine.roessum.com localhost:3000
+caddy-site() {
+  local name="$1" up="$2" dir=/etc/caddy/cmdbook.d main=/etc/caddy/Caddyfile
+  { [ -n "$name" ] && [ -n "$up" ]; } || { echo "usage: caddy-site <domain> <host:port>"; return 1; }
+  sudo mkdir -p "$dir"
+  grep -qsF 'import cmdbook.d/*' "$main" || echo 'import cmdbook.d/*' | sudo tee -a "$main" >/dev/null
+  printf '%s {\n\ttls {\n\t\tdns hetzner {env.HETZNER_API_TOKEN}\n\t}\n\treverse_proxy %s\n}\n' "$name" "$up" \
+    | sudo tee "$dir/$name.caddy" >/dev/null
+  sudo systemctl reload caddy && echo "✓ https://$name -> $up  (issuing via DNS-01; watch with web-log)"
+}
+# Issuer + expiry for every certificate Caddy holds (trust this, not one log line).
+caddy-certs() {
+  local f
+  sudo find /var/lib/caddy/.local/share/caddy/certificates -name '*.crt' 2>/dev/null | while read -r f; do
+    echo "${f##*/}"; sudo openssl x509 -in "$f" -noout -issuer -enddate 2>/dev/null | sed 's/^/    /'
+  done
+}
+# Clear stale cert/ACME state for ONE domain (old self-signed or staging leftovers
+# make the first issue attempt collide with itself). Caddy re-issues on restart.
+caddy-cert-reset() {
+  local n="${1:?usage: caddy-cert-reset <domain>}"
+  sudo find /var/lib/caddy/.local/share/caddy -name "*$n*" -print -exec rm -rf {} + 2>/dev/null
+  sudo systemctl restart caddy && echo "cleared cert state for $n — watch re-issue with web-log"
+}
+# Let the LAN reach Caddy on 80/443 (by default only WireGuard could). Persist with fw-save!
+alias fw-web-open='sudo nft add rule inet filter input iifname { "eth1", "wlan0", "wlan1" } tcp dport { 80, 443 } accept'
 unalias dns-check 2>/dev/null || true   # was an alias before; avoid reload breaking on dns-check()
 dns-check() {   # what a domain resolves to (uses getent/nslookup when dig isn't installed)
   [ -n "$1" ] || { echo "usage: dns-check <domain>"; return 1; }
